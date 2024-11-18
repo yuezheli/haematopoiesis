@@ -113,4 +113,5 @@ Detailed related to how to set up the repo is detailed in [SickleCell page](Sick
 
 - [NK_dynamics_estimation](NK_dynamics_estimation/)  (Estimation on NK cell rates in mouse. Note NK cell was not included in the final model)
 
+- [thrombocytopenia-t-dm1](thrombocytopenia-t-dm1/) Implementation of megakaryocyte development and platelet dynamics and platelet decrease as the result of T-DM1 treatment. 
 
