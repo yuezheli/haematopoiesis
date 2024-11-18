@@ -1,0 +1,18 @@
+Version: 1
+
+Packages:
+  - tidyverse
+  - mrgsolve
+  - ggplot2
+  - gridExtra
+  - grid
+  - mrggsave
+  - ggtext
+  - here
+  - pmtables
+
+Repos:
+  - MPN: https://mpn.metworx.com/snapshots/stable/2024-09-23
+      
+Lockfile:
+    Type: renv
