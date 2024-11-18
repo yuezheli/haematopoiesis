@@ -1,0 +1,195 @@
+---
+title: "Bdepletion"
+author: "Yuezhe Li"
+date: "2/16/2022"
+output: html_document
+---
+
+```{r}
+rm(list = ls())
+
+library(tidyverse)
+library(mrgsolve)
+library(gridExtra)
+library(grid)
+
+setwd(dirname(rstudioapi::getSourceEditorContext()$path)) # set the working directory at the folder that contains the script
+
+source('DepletionParam.r')
+
+basemus <- mread("Bcell_mus2") # this is the base model for mouse
+
+basehomo <- mread("Bcell_mus4") # this is the base model for human
+```
+# Simulation for mouse
+
+## depleting both splenic and circulating B cells
+
+```{r}
+ssmus <- basemus %>% mrgsim(end = 150, delta = 1) %>% as_tibble() %>% tail(n = 1) %>% mutate(time = -1)
+
+print(ssmus$BMrec/2000)  # B cell count per uL blood
+
+ssbasemus <- basemus %>% init(ssmus)
+
+## 100% effective depletion
+sim11 <- ssbasemus %>% init(Bt = 0, BMspl = 0, BMrec = 0) %>% mrgsim(end = 140) %>% as.tibble()
+
+## 80% effective depletion
+sim12 <- ssbasemus %>% init(Bt = ssmus$Bt * 0.2, BMspl = ssmus$BMspl * 0.2, BMrec = ssmus$BMrec * 0.2) %>% mrgsim(end = 140) %>% as.tibble()
+
+
+plot1 = ggplot() + 
+  geom_line(data = rbind(ssmus, sim11), aes(x = time/7, y = BMrec/2000, color = '100%')) + 
+  geom_line(data =  rbind(ssmus, sim12), aes(x = time/7, y = BMrec/2000, color = '80%')) + 
+  labs(y = 'B cells per uL blood', x = 'time (weeks)', color = 'depletion percentage') + theme_bw() + 
+  ggtitle('mouse, depleting splenic + circulating B cells')
+
+```
+
+
+## depleting circulating B cells
+
+```{r}
+ssmus <- basemus %>% mrgsim(end = 150, delta = 1) %>% as_tibble() %>% tail(n = 1) %>% mutate(time = -1)
+
+ssbasemus <- basemus %>% init(ssmus)
+
+## 100% effective depletion
+sim21 <- ssbasemus %>% init(BMrec = 0) %>% mrgsim(end = 14) %>% as.tibble()
+
+## 80% effective depletion
+sim22 <- ssbasemus %>% init(BMrec = ssmus$BMrec * 0.2) %>% mrgsim(end = 14) %>% as.tibble()
+
+plot2 = ggplot() + 
+  geom_line(data = rbind(ssmus, sim21), aes(x = time/7, y = BMrec/2000, color = '100%')) + 
+  geom_line(data =  rbind(ssmus, sim22), aes(x = time/7, y = BMrec/2000, color = '80%')) + 
+  labs(y = 'B cells per uL blood', x = 'time (weeks)', color = 'depletion percentage') + theme_bw() + 
+  ggtitle('mouse, depleting only circulating B cells')
+
+```
+
+## depleting splenic + circulating + immature B cells, and half propreB cells
+
+```{r}
+ssmus <- basemus %>% mrgsim(end = 150, delta = 1) %>% as_tibble() %>% tail(n = 1) %>% mutate(time = -1)
+
+## 100% effective depletion
+sim31 <- basemus %>% init(Bt = 0, BMspl = 0, BMrec = 0, Bi = 0, Boe = ssmus$Boe * 0.5) %>% mrgsim(end = 140) %>% as.tibble()
+
+## 80% effective depletion
+sim32 <- basemus %>% init(Bt = ssmus$Bt * 0.2, BMspl = ssmus$BMspl * 0.2, BMrec = ssmus$BMrec * 0.2, Bi = ssmus$Bi * 0.2, Boe = ssmus$Boe * 0.5) %>% mrgsim(end = 140) %>% as.tibble()
+
+plot3 = ggplot() + 
+  geom_line(data = rbind(ssmus, sim31), aes(x = time/7, y = BMrec/2000, color = '100%')) + 
+  geom_line(data =  rbind(ssmus, sim32), aes(x = time/7, y = BMrec/2000, color = '80%')) + 
+  labs(y = 'B cells per uL blood', x = 'time (weeks)', color = 'depletion percentage') + theme_bw() + 
+  ggtitle('mouse, depleting splenic + circulating + immature & half of propre B cells')
+
+```
+
+## depleting splenic + circulating + immature B cells
+
+```{r}
+ssmus <- basemus %>% mrgsim(end = 150, delta = 1) %>% as_tibble() %>% tail(n = 1) %>% mutate(time = -1)
+
+## 100% effective depletion
+sim41 <- basemus %>% init(Bt = 0, BMspl = 0, BMrec = 0, Bi = 0, Boe = ssmus$Boe * 0.5) %>% mrgsim(end = 140) %>% as.tibble()
+
+## 80% effective depletion
+sim42 <- basemus %>% init(Bt = ssmus$Bt * 0.2, BMspl = ssmus$BMspl * 0.2, BMrec = ssmus$BMrec * 0.2, Bi = ssmus$Bi * 0.2, Boe = ssmus$Boe * 0.5) %>% mrgsim(end = 140) %>% as.tibble()
+
+plot4 = ggplot() + 
+  geom_line(data = rbind(ssmus, sim41), aes(x = time/7, y = BMrec/2000, color = '100%')) + 
+  geom_line(data =  rbind(ssmus, sim42), aes(x = time/7, y = BMrec/2000, color = '80%')) + 
+  labs(y = 'B cells per uL blood', x = 'time (weeks)', color = 'depletion percentage') + theme_bw() + 
+  ggtitle('mouse, depleting splenic + circulating + immature B cells')
+
+```
+
+# Simulation for human
+
+## depleting both splenic and circulating B cells
+
+```{r}
+sshomo <- basehomo %>% mrgsim(end = 150, delta = 1) %>% as_tibble() %>% tail(n = 1) %>% mutate(time = -1)
+
+ssbasehomo <- basehomo %>% init(sshomo)
+
+## 100% effective depletion
+sim101 <- ssbasehomo %>% init(Bt = 0, BMspl = 0, BMrec = 0) %>% mrgsim(end = 140) %>% as.tibble()
+
+## 80% effective depletion
+sim102 <- ssbasehomo %>% init(Bt = sshomo$Bt * 0.2, BMspl = sshomo$BMspl * 0.2, BMrec = sshomo$BMrec * 0.2) %>% mrgsim(end = 140) %>% as.tibble()
+
+
+plot10 = ggplot() + 
+  geom_line(data = rbind(sshomo, sim101), aes(x = time/7, y = BMrec/5e6, color = '100%')) + 
+  geom_line(data =  rbind(sshomo, sim102), aes(x = time/7, y = BMrec/5e6, color = '80%')) + 
+  labs(y = 'B cells per uL blood', x = 'time (weeks)', color = 'depletion percentage') + theme_bw() + 
+  ggtitle('human, depleting splenic + circulating B cells')
+
+```
+## depleting circulating B cells
+
+```{r}
+sshomo <- basehomo %>% mrgsim(end = 150, delta = 1) %>% as_tibble() %>% tail(n = 1) %>% mutate(time = -1)
+
+ssbasehomo <- basehomo %>% init(sshomo)
+
+## 100% effective depletion
+sim201 <- ssbasehomo %>% init(BMrec = 0) %>% mrgsim(end = 14) %>% as.tibble()
+
+## 80% effective depletion
+sim202 <- ssbasehomo %>% init(BMrec = sshomo$BMrec * 0.2) %>% mrgsim(end = 14) %>% as.tibble()
+
+plot20 = ggplot() + 
+  geom_line(data = rbind(sshomo, sim201), aes(x = time/7, y = BMrec/5e6, color = '100%')) + 
+  geom_line(data =  rbind(sshomo, sim202), aes(x = time/7, y = BMrec/5e6, color = '80%')) + 
+  labs(y = 'B cells per uL blood', x = 'time (weeks)', color = 'depletion percentage') + theme_bw() + 
+  ggtitle('human, depleting only circulating B cells')
+
+```
+
+## depleting splenic + circulating + immature B cells, and half propreB cells
+
+```{r}
+sshomo <- basehomo %>% mrgsim(end = 150, delta = 1) %>% as_tibble() %>% tail(n = 1) %>% mutate(time = -1)
+
+## 100% effective depletion
+sim301 <- basehomo %>% init(Bt = 0, BMspl = 0, BMrec = 0, Bi = 0, Boe = sshomo$Boe * 0.5) %>% mrgsim(end = 140) %>% as.tibble()
+
+## 80% effective depletion
+sim302 <- basehomo %>% init(Bt = sshomo$Bt * 0.2, BMspl = sshomo$BMspl * 0.2, BMrec = sshomo$BMrec * 0.2, Bi = sshomo$Bi * 0.2, Boe = sshomo$Boe * 0.5) %>% mrgsim(end = 140) %>% as.tibble()
+
+plot30 = ggplot() + 
+  geom_line(data = rbind(sshomo, sim301), aes(x = time/7, y = BMrec/5e6, color = '100%')) + 
+  geom_line(data =  rbind(sshomo, sim302), aes(x = time/7, y = BMrec/5e6, color = '80%')) + 
+  labs(y = 'B cells per uL blood', x = 'time (weeks)', color = 'depletion percentage') + theme_bw() + 
+  ggtitle('mouse, depleting splenic + circulating + immature & half of propre B cells')
+```
+
+## depleting splenic + circulating + immature B cells
+
+```{r}
+sshomo <- basehomo %>% mrgsim(end = 150, delta = 1) %>% as_tibble() %>% tail(n = 1) %>% mutate(time = -1)
+
+## 100% effective depletion
+sim401 <- basehomo %>% init(Bt = 0, BMspl = 0, BMrec = 0, Bi = 0, Boe = sshomo$Boe) %>% mrgsim(end = 140) %>% as.tibble()
+
+## 80% effective depletion
+sim402 <- basehomo %>% init(Bt = sshomo$Bt * 0.2, BMspl = sshomo$BMspl * 0.2, BMrec = sshomo$BMrec * 0.2, Bi = sshomo$Bi * 0.2, Boe = sshomo$Boe) %>% mrgsim(end = 140) %>% as.tibble()
+
+plot40 = ggplot() + 
+  geom_line(data = rbind(sshomo, sim401), aes(x = time/7, y = BMrec/5e6, color = '100%')) + 
+  geom_line(data =  rbind(sshomo, sim402), aes(x = time/7, y = BMrec/5e6, color = '80%')) + 
+  labs(y = 'B cells per uL blood', x = 'time (weeks)', color = 'depletion percentage') + theme_bw() + 
+  ggtitle('mouse, depleting splenic + circulating + immature B cells')
+```
+# Check all the plots
+
+```{r}
+library(mrggsave)
+
+mrggsave(list(plot1, plot2, plot3, plot4, plot10, plot20, plot30, plot40), dir = "../Bcell", width = 7, height = 3, script = 'Bdepletion.Rmd')
+```

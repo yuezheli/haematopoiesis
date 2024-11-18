@@ -1,0 +1,471 @@
+---
+title: "LocalSens_T"
+author: "Yuezhe Li"
+date: "1/21/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+## Set up the model
+
+rm(list = ls())
+library(tidyverse)
+library(mrgsolve)
+library(gridExtra)
+library(grid)
+
+setwd(dirname(rstudioapi::getSourceEditorContext()$path)) # set the working directory at the folder that contains the script
+source('transplant_functions.r')
+source('LoadObs.r')
+source('Depleted_B.r')
+
+modo <- mread("erythrocytes_Hb_lymphoid_myeloid")  %>% param(depletedparam)
+```
+
+
+
+```{r}
+#------------------------- STEADY STATE SENSITIVITY ANALYSIS -------------------------#
+
+exidata0 <- expand.idata(alphaCLP2DN = c(1e-4, 1.5e-4, 2e-4, 2.5e-4, 3e-4, 9e-4, 2e-3))
+
+sim0 <- modo %>% init(LT0 = 100) %>% idata_set(exidata0) %>% mrgsim(end = 1500) %>% filter(time == 1500)
+tmp = merge(x = exidata0, y = sim0, by = "ID", all.x = TRUE)
+
+plot1 = ggplot(data = tmp) + 
+  geom_point(aes(x = alphaCLP2DN, y = T)) +
+  geom_hline(yintercept=1700, linetype="dashed", color = "red") + # The line value is from Boyer et al., 2019
+  labs(y = 'naive T cells count (#/uL)', x = 'CLP export to thymus rate') +
+  scale_x_continuous(trans='log10') + theme_bw()
+
+plot2 = ggplot(data = tmp) + 
+  geom_point(aes(x = alphaCLP2DN, y = CLPexport2thymus)) +
+  geom_hline(yintercept=10, linetype="dashed", color = "red") + 
+  labs(y = 'CLP export to thymus count', x = 'CLP export to thymus rate')  + 
+  scale_x_continuous(trans='log10') + theme_bw()
+
+png('img/alphaCLP2DNscan.png', width = 15, height = 4, units = 'in', res = 300)
+grid.arrange(plot2, plot1, ncol = 2)
+dev.off()
+```
+
+```{r}
+#------------------------- DYNAMICS SENSITIVITY ANALYSIS, MPPT -------------------------#
+# parameter scanning on CLP -> DN (NO IMPACT)
+mpptclp2dn1 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 1e-4)) %>% mrgsim(end = 150) %>% as_tibble()
+mpptclp2dn3 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 3e-4)) %>% mrgsim(end = 150) %>% as_tibble()
+mpptclp2dn5 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 5e-4)) %>% mrgsim(end = 150) %>% as_tibble()
+mpptclp2dn9 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 9e-4)) %>% mrgsim(end = 150) %>% as_tibble()
+
+
+tmpmppt = ggplot() + 
+geom_line(data = mpptclp2dn1, aes(x = time, y = transT * 100, color = 'alphaCLP2DN = 1e-4')) + 
+geom_line(data = mpptclp2dn3, aes(x = time, y = transT * 100, color = 'alphaCLP2DN = 3e-4')) + 
+geom_line(data = mpptclp2dn5, aes(x = time, y = transT * 100, color = 'alphaCLP2DN = 5e-4')) +
+geom_line(data = mpptclp2dn9, aes(x = time, y = transT * 100, color = 'alphaCLP2DN = 9e-4')) +
+labs(y = 'donor T (%)', x = 'time (days)', color = 'CLP export to thymus rate') + 
+ggtitle('MPP transplant')+ theme_bw()  + theme(legend.position="bottom") 
+
+# parameter scanning on CLP -> DN (NO IMPACT)
+clptclp2dn1 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 1e-4), t_conditioning_strength = 0.05) %>% mrgsim(end = 150) %>% as_tibble()
+clptclp2dn3 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 3e-4), t_conditioning_strength = 0.05) %>% mrgsim(end = 150) %>% as_tibble()
+clptclp2dn5 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 5e-4), t_conditioning_strength = 0.05) %>% mrgsim(end = 150) %>% as_tibble()
+clptclp2dn9 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 9e-4), t_conditioning_strength = 0.05) %>% mrgsim(end = 150) %>% as_tibble()
+
+
+tmpclpt = ggplot() + 
+  geom_line(data = clptclp2dn1, aes(x = time, y = transT * 100, color = 'alphaCLP2DN = 1e-4')) + 
+  geom_line(data = clptclp2dn3, aes(x = time, y = transT * 100, color = 'alphaCLP2DN = 3e-4')) + 
+  geom_line(data = clptclp2dn5, aes(x = time, y = transT * 100, color = 'alphaCLP2DN = 5e-4')) +
+  geom_line(data = clptclp2dn9, aes(x = time, y = transT * 100, color = 'alphaCLP2DN = 9e-4')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'CLP export to thymus rate') + 
+  ggtitle('CLP transplant') + theme_bw() + theme(legend.position="bottom") 
+
+grid.arrange(tmpmppt, tmpclpt, ncol = 2)
+```
+
+#------------------------- DYNAMICS SENSITIVITY ANALYSIS, CLPT -------------------------#
+
+```{r}
+# parameter scan on T cell export (NO IMPACT)
+clpalpha0 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_e = 0.9)) %>% mrgsim(end = 150) %>% as_tibble()
+clpalpha4 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_e = 0.994)) %>% mrgsim(end = 150) %>% as_tibble()
+clpalpha8 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_e = 1)) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clpalpha0, aes(x = time, y = transT * 100, color = 'alpha_e = 0.9')) + 
+  geom_line(data = clpalpha4, aes(x = time, y = transT * 100, color = 'alpha_e = 0.994')) + 
+  geom_line(data = clpalpha8, aes(x = time, y = transT * 100, color = 'alpha_e = 1')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'naive T') + 
+  ggtitle('CLP transplant') 
+```
+
+```{r}
+# parameter scan on T cell death rate in peripheral blood (SOME IMPACT from CD4+ death, but mostly impact amplitude)
+clpcd4die0 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(death_cd4b = 0.1)) %>% mrgsim(end = 150) %>% as_tibble()
+clpcd4die1 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(death_cd4b = 0.3)) %>% mrgsim(end = 150) %>% as_tibble()
+clpcd4die2 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(death_cd4b = 0.9)) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clpcd4die0, aes(x = time, y = transT * 100, color = 'death_cd4b = 0.1')) + 
+  geom_line(data = clpcd4die1, aes(x = time, y = transT * 100, color = 'death_cd4b = 0.3')) + 
+  geom_line(data = clpcd4die2, aes(x = time, y = transT * 100, color = 'death_cd4b = 0.9')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'naive T') + 
+  ggtitle('CLP transplant') 
+```
+
+```{r}
+clpcd8die0 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(death_cd8b = 0.01)) %>% mrgsim(end = 150) %>% as_tibble()
+clpcd8die1 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(death_cd8b = 0.1)) %>% mrgsim(end = 150) %>% as_tibble()
+clpcd8die2 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(death_cd8b = 0.2)) %>% mrgsim(end = 150) %>% as_tibble()
+clpcd8die3 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(death_cd8b = 0.4)) %>% mrgsim(end = 150) %>% as_tibble()
+clpcd8die4 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(death_cd8b = 0.8)) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clpcd8die0, aes(x = time, y = transT * 100, color = 'death_cd8b = 0.01')) + 
+  geom_line(data = clpcd8die1, aes(x = time, y = transT * 100, color = 'death_cd8b = 0.1')) + 
+  geom_line(data = clpcd8die2, aes(x = time, y = transT * 100, color = 'death_cd8b = 0.2')) +
+  geom_line(data = clpcd8die3, aes(x = time, y = transT * 100, color = 'death_cd8b = 0.4')) +
+  geom_line(data = clpcd8die4, aes(x = time, y = transT * 100, color = 'death_cd8b = 0.8')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'naive T') + 
+  ggtitle('CLP transplant') 
+```
+
+```{r}
+# parameter scan on T cell death in other tissue (NO IMPACT on timing)
+clpcd4die3 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(death_cd4l = 0.003)) %>% mrgsim(end = 150) %>% as_tibble()
+clpcd4die5 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(death_cd4l = 0.0005)) %>% mrgsim(end = 150) %>% as_tibble()
+clpcd4die9 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(death_cd4l = 0.0009)) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clpcd4die3, aes(x = time, y = transT * 100, color = 'death_cd4l = 0.003')) + 
+  geom_line(data = clpcd4die5, aes(x = time, y = transT * 100, color = 'death_cd4l = 0.0005')) + 
+  geom_line(data = clpcd4die9, aes(x = time, y = transT * 100, color = 'death_cd4l = 0.0009')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'naive T') + 
+  ggtitle('CLP transplant')
+```
+
+```{r}
+# parameter scan on CLP proliferation rates (NO IMPACT on timing)
+clpbeta1 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 0.1)) %>% mrgsim(end = 150) %>% as_tibble()
+clpbeta2 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 1)) %>% mrgsim(end = 150) %>% as_tibble()
+clpbeta3 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 3)) %>% mrgsim(end = 150) %>% as_tibble()
+clpbeta4 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(alphaCLP2DN = 30)) %>% mrgsim(end = 150) %>% as_tibble()
+
+tmpT = ggplot() + 
+  geom_line(data = clpbeta1, aes(x = time, y = transT * 100, color = 'betaCLP = 0.1')) + 
+  geom_line(data = clpbeta2, aes(x = time, y = transT * 100, color = 'betaCLP = 1')) + 
+  geom_line(data = clpbeta3, aes(x = time, y = transT * 100, color = 'betaCLP = 3')) +
+  geom_line(data = clpbeta4, aes(x = time, y = transT * 100, color = 'betaCLP = 30')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'CLP proliferation rate') + 
+  ggtitle('MPP transplant') + theme_bw()
+
+tmpB = ggplot() + 
+  geom_line(data = clpbeta1, aes(x = time, y = transB * 100, color = 'betaCLP = 0.1')) + 
+  geom_line(data = clpbeta2, aes(x = time, y = transB * 100, color = 'betaCLP = 1')) + 
+  geom_line(data = clpbeta3, aes(x = time, y = transB * 100, color = 'betaCLP = 3')) +
+  geom_line(data = clpbeta4, aes(x = time, y = transB * 100, color = 'betaCLP = 30')) +
+  labs(y = 'donor B (%)', x = 'time (days)', color = 'CLP proliferation rate') + 
+  ggtitle('MPP transplant') + theme_bw()
+
+grid.arrange(tmpT, tmpB, ncol = 1)
+```
+
+
+```{r}
+# parameter scan on CLP death rates (LITTLE IMPACT)
+clpkCLP1 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(kCLP = 0.001)) %>% mrgsim(end = 150) %>% as_tibble()
+clpkCLP2 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(kCLP = 0.01)) %>% mrgsim(end = 150) %>% as_tibble()
+clpkCLP3 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(kCLP = 0.015)) %>% mrgsim(end = 150) %>% as_tibble()
+clpkCLP4 = global_mppt(conditioning_strength = 0.5, mod = modo %>% param(kCLP = 0.15)) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clpkCLP1, aes(x = time, y = transT * 100, color = 'kCLP = 0.001')) + 
+  geom_line(data = clpkCLP2, aes(x = time, y = transT * 100, color = 'kCLP = 0.01')) + 
+  geom_line(data = clpkCLP3, aes(x = time, y = transT * 100, color = 'kCLP = 0.015')) +
+  geom_line(data = clpkCLP4, aes(x = time, y = transT * 100, color = 'kCLP = 0.15')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'CLP death rate') + 
+  ggtitle('MPP transplant') 
+```
+
+
+```{r}
+# parameter scan on T cell conditioning strength (NO IMPACT on timing, very small impact on amplitude)
+clptcond1 = global_clpt(conditioning_strength = 0.5, mod = modo, t_conditioning_strength = 0.05) %>% mrgsim(end = 150) %>% as_tibble()
+clptcond2 = global_clpt(conditioning_strength = 0.5, mod = modo, t_conditioning_strength = 0.1) %>% mrgsim(end = 150) %>% as_tibble()
+clptcond3 = global_clpt(conditioning_strength = 0.5, mod = modo, t_conditioning_strength = 0.4) %>% mrgsim(end = 150) %>% as_tibble()
+clptcond4 = global_clpt(conditioning_strength = 0.5, mod = modo, t_conditioning_strength = 0.8) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clptcond1, aes(x = time, y = transT * 100, color = '5%')) + 
+  geom_line(data = clptcond2, aes(x = time, y = transT * 100, color = '10%')) + 
+  geom_line(data = clptcond3, aes(x = time, y = transT * 100, color = '40%')) +
+  geom_line(data = clptcond4, aes(x = time, y = transT * 100, color = '80%')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'loss thymic cells') + 
+  ggtitle('CLP transplant') 
+```
+
+
+```{r}
+# parameter scan on DN cell proliferation rate (SOME IMPACT on timing)
+clptpN1 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(pN = 0.1)) %>% mrgsim(end = 150) %>% as_tibble()
+clptpN2 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(pN = 0.23)) %>% mrgsim(end = 150) %>% as_tibble()
+clptpN3 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(pN = 0.5)) %>% mrgsim(end = 150) %>% as_tibble()
+clptpN4 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(pN = 0.8)) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clptpN1, aes(x = time, y = transT * 100, color = 'pN = 0.1')) + 
+  geom_line(data = clptpN2, aes(x = time, y = transT * 100, color = 'pN = 0.23')) + 
+  geom_line(data = clptpN3, aes(x = time, y = transT * 100, color = 'pN = 0.5')) +
+  geom_line(data = clptpN4, aes(x = time, y = transT * 100, color = 'pN = 0.8')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'DN cell proliferation rate') + 
+  ggtitle('CLP transplant') 
+```
+
+
+```{r}
+# parameter scan on DP cell proliferation rate (NO IMPACT)
+clptpP1 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(pP = 2)) %>% mrgsim(end = 150) %>% as_tibble()
+clptpP2 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(pP = 4.5)) %>% mrgsim(end = 150) %>% as_tibble()
+clptpP3 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(pP = 9)) %>% mrgsim(end = 150) %>% as_tibble()
+clptpP4 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(pP = 18)) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clptpP1, aes(x = time, y = transT * 100, color = 'pP = 2')) + 
+  geom_line(data = clptpP2, aes(x = time, y = transT * 100, color = 'pP = 4.5')) + 
+  geom_line(data = clptpP3, aes(x = time, y = transT * 100, color = 'pP = 9')) +
+  geom_line(data = clptpP4, aes(x = time, y = transT * 100, color = 'pP = 18')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'DP cell proliferation rate') + 
+  ggtitle('CLP transplant') 
+```
+
+
+```{r}
+# parameter scan on DN cell differentiation rate
+clptalpha_muN1 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_muN = 0.1)) %>% mrgsim(end = 150) %>% as_tibble()
+clptalpha_muN2 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_muN = 0.29)) %>% mrgsim(end = 150) %>% as_tibble()
+clptalpha_muN3 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_muN = 0.5)) %>% mrgsim(end = 150) %>% as_tibble()
+clptalpha_muN4 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_muN = 0.8)) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clptalpha_muN1, aes(x = time, y = transT * 100, color = 'alpha_muN = 0.1')) + 
+  geom_line(data = clptalpha_muN2, aes(x = time, y = transT * 100, color = 'alpha_muN = 0.29')) + 
+  geom_line(data = clptalpha_muN3, aes(x = time, y = transT * 100, color = 'alpha_muN = 0.5')) +
+  geom_line(data = clptalpha_muN4, aes(x = time, y = transT * 100, color = 'alpha_muN = 0.8')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'DN cell proliferation rate') + 
+  ggtitle('CLP transplant') 
+```
+
+
+```{r}
+# parameter scan on DP cell differentiation rate (NO IMPACT)
+clptalpha_muP1 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_muN = 0.1)) %>% mrgsim(end = 150) %>% as_tibble()
+clptalpha_muP2 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_muN = 0.2029)) %>% mrgsim(end = 150) %>% as_tibble()
+clptalpha_muP3 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_muN = 0.21)) %>% mrgsim(end = 150) %>% as_tibble()
+clptalpha_muP4 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_muN = 0.22)) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clptalpha_muP1, aes(x = time, y = transT * 100, color = 'alpha_muP = 0.1')) + 
+  geom_line(data = clptalpha_muP2, aes(x = time, y = transT * 100, color = 'alpha_muP = 0.2029')) + 
+  geom_line(data = clptalpha_muP3, aes(x = time, y = transT * 100, color = 'alpha_muP = 0.21')) +
+  geom_line(data = clptalpha_muP4, aes(x = time, y = transT * 100, color = 'alpha_muP = 0.22')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'DN cell proliferation rate') + 
+  ggtitle('CLP transplant') 
+```
+
+
+```{r}
+# parameter scanning on DP removal rate (LITTLE IMPACT)
+clptalpha_muLP1 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(muLP = 0.1)) %>% mrgsim(end = 150) %>% as_tibble()
+clptalpha_muLP2 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(muLP = 0.37)) %>% mrgsim(end = 150) %>% as_tibble()
+clptalpha_muLP3 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(muLP = 0.4)) %>% mrgsim(end = 150) %>% as_tibble()
+clptalpha_muLP4 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(muLP = 0.8)) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clptalpha_muLP1, aes(x = time, y = transT * 100, color = 'muLP = 0.1')) + 
+  geom_line(data = clptalpha_muLP2, aes(x = time, y = transT * 100, color = 'muLP = 0.37')) + 
+  geom_line(data = clptalpha_muLP3, aes(x = time, y = transT * 100, color = 'muLP = 0.4')) +
+  geom_line(data = clptalpha_muLP4, aes(x = time, y = transT * 100, color = 'muLP = 0.8')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'DN cell proliferation rate') + 
+  ggtitle('CLP transplant') 
+```
+
+
+```{r}
+# parameter scan on thymic progenitor death rate (some impact)
+clptdelta1 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(delta = 0)) %>% mrgsim(end = 150) %>% as_tibble()
+clptdelta2 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(delta = 0.001)) %>% mrgsim(end = 150) %>% as_tibble()
+clptdelta3 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(delta = 0.01)) %>% mrgsim(end = 150) %>% as_tibble()
+clptdelta4 = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(delta = 0.1)) %>% mrgsim(end = 150) %>% as_tibble()
+
+ggplot() + 
+  geom_line(data = clptdelta1, aes(x = time, y = transT * 100, color = 'delta = 0')) + 
+  geom_line(data = clptdelta2, aes(x = time, y = transT * 100, color = 'delta = 0.001')) + 
+  geom_line(data = clptdelta3, aes(x = time, y = transT * 100, color = 'delta = 0.01')) +
+  geom_line(data = clptdelta4, aes(x = time, y = transT * 100, color = 'delta = 0.1')) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'thymic progenitor death rate') + 
+  ggtitle('CLP transplant') 
+```
+
+##===== FINAL COMPARISON =====##
+```{r}
+original = global_clpt(conditioning_strength = 0.5, mod = modo) %>% mrgsim(end = 150) %>% as_tibble()
+new_10k = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_muN = 0.5, pN = 0.5, delta = 0.001), CLPnumber = 10000) %>% mrgsim(end = 150) %>% as_tibble()
+new_8k = global_clpt(conditioning_strength = 0.5, mod = modo %>% param(alpha_muN = 0.5, pN = 0.5, delta = 0.001), CLPnumber = 8000) %>% mrgsim(end = 150) %>% as_tibble()
+
+
+ggplot() + 
+  geom_line(data = original, aes(x = time, y = transT * 100, color = 'original, CLP# = 10k')) +   
+  geom_line(data = new_10k, aes(x = time, y = transT * 100, color = 'adjusted, CLP# = 10k')) + 
+  geom_line(data = new_8k, aes(x = time, y = transT * 100, color = 'adjusted, CLP# = 8k')) + 
+  geom_point(data=clpt_T, aes(x=time, y=cell_fraction), alpha = 0.5) +
+  geom_errorbar(data=clpt_T, aes(x=time, ymin=T_lower,ymax=T_upper), alpha = 0.5) +
+  labs(y = 'donor T (%)', x = 'time (days)', color = 'parameter sets') + 
+  ggtitle('CLP transplant') + theme_bw()
+
+```
+
+
+```{r}
+# double check the steady state
+tmpfinal1 <- modo %>% param(alpha_muN = 0.5, pN = 0.5, delta = 0.1) %>% init(LT0 = 100) %>% mrgsim(end = 1500) %>% filter(time == 1500)
+# lymphocyte count ~700 per uL blood, in the lower range of ref data
+# tmpfinal2 <- modo %>% init(LT0 = 100) %>% mrgsim(end = 1500) %>% filter(time == 1500)
+# tmpfinal3 <- modo %>% param(alpha_muN = 0.5, pN = 0.5, delta = 0.001, alphaCLP2DN = 7.5e-4) %>% init(LT0 = 100) %>% mrgsim(end = 1500) %>% filter(time == 1500)
+```
+
+
+Sensitivity Analysis on progenitor number in transplant experiments.
+
+```{r}
+#------------------------- HSC transplanted cell count -------------------------#
+hsct100 = global_hsct(conditioning_strength = 0.5, LTnumber = 100) %>% mrgsim(end = 150) %>% as_tibble()
+hsct400 = global_hsct(conditioning_strength = 0.5, LTnumber = 400) %>% mrgsim(end = 150) %>% as_tibble()
+hsct1000 = global_hsct(conditioning_strength = 0.5, LTnumber = 1000) %>% mrgsim(end = 150) %>% as_tibble()
+
+rbchsctnum <- ggplot() + 
+  geom_line(data = hsct100, aes(x = time, y = RBC1/(2e3), color = '100 HSC')) + 
+  geom_line(data = hsct400, aes(x = time, y = RBC1/(2e3), color = '400 HSC')) + 
+  geom_line(data = hsct1000, aes(x = time, y = RBC1/(2e3), color = '1k HSC')) + 
+  geom_point(data = hsct_rbc, aes(x = time, y = cell_count, color = 'obs')) +
+  geom_errorbar(data=hsct_rbc, aes(x=time, ymin=RBC_lower,ymax=RBC_upper), alpha = 0.5) +
+  labs(y = 'donor RBC (#/uL)', x = 'time (days)', color = 'HSCT cell count') + theme_bw() + theme(legend.position="bottom") 
+
+bhsctnum <- ggplot() + 
+  geom_line(data = hsct100, aes(x = time, y = transB * 100, color = '100 HSC')) + 
+  geom_line(data = hsct400, aes(x = time, y = transB * 100, color = '400 HSC')) + 
+  geom_line(data = hsct1000, aes(x = time, y = transB * 100, color = '1k HSC')) + 
+  geom_point(data = hsct_B, aes(x = time, y = cell_fraction, color = 'obs')) +
+  geom_errorbar(data=hsct_B, aes(x=time, ymin=B_lower,ymax=B_upper), alpha = 0.5) +
+  labs(y = 'donor B cell (%)', x = 'time (days)', color = 'HSCT cell count') + theme_bw() + theme(legend.position="bottom") 
+
+thsctnum <- ggplot() + 
+  geom_line(data = hsct100, aes(x = time, y = transT * 100, color = '100 HSC')) + 
+  geom_line(data = hsct400, aes(x = time, y = transT * 100, color = '400 HSC')) + 
+  geom_line(data = hsct1000, aes(x = time, y = transT * 100, color = '1k HSC')) + 
+  geom_point(data = hsct_T, aes(x = time, y = cell_fraction, color = 'obs')) +
+  geom_errorbar(data=hsct_T, aes(x=time, ymin=T_lower,ymax=T_upper), alpha = 0.5) +
+  labs(y = 'donor T cell (%)', x = 'time (days)', color = 'HSCT cell count') + theme_bw() + theme(legend.position="bottom") 
+
+
+
+#------------------------- MPP transplanted cell count -------------------------#
+mppt1k = global_mppt(conditioning_strength = 0.5, latempp = 0, MPPnumber = 1000) %>% mrgsim(end = 150) %>% as_tibble()
+mppt5k = global_mppt(conditioning_strength = 0.5, latempp = 0, MPPnumber = 5000) %>% mrgsim(end = 150) %>% as_tibble()
+mppt10k = global_mppt(conditioning_strength = 0.5, latempp = 0, MPPnumber = 10000) %>% mrgsim(end = 150) %>% as_tibble()
+
+rbcmpptnum <- ggplot() + 
+  geom_line(data = mppt1k, aes(x = time, y = RBC1/(2e3), color = '1k MPP')) + 
+  geom_line(data = mppt5k, aes(x = time, y = RBC1/(2e3), color = '5k MPP')) + 
+  geom_line(data = mppt10k, aes(x = time, y = RBC1/(2e3), color = '10k MPP')) + 
+  geom_point(data = mppt_rbc, aes(x = time, y = cell_count, color = 'obs')) +
+  geom_errorbar(data=mppt_rbc, aes(x=time, ymin=RBC_lower,ymax=RBC_upper), alpha = 0.5) +
+  labs(y = 'donor RBC (#/uL)', x = 'time (days)', color = 'MPPT cell count') + theme_bw() + theme(legend.position="bottom") 
+
+bmpptnum <- ggplot() + 
+  geom_line(data = mppt1k, aes(x = time, y = transB * 100, color = '1k MPP')) + 
+  geom_line(data = mppt5k, aes(x = time, y = transB * 100, color = '5k MPP')) + 
+  geom_line(data = mppt10k, aes(x = time, y = transB * 100, color = '10k MPP')) + 
+  geom_point(data = mppt_B, aes(x = time, y = cell_fraction, color = 'obs')) +
+  geom_errorbar(data=mppt_B, aes(x=time, ymin=B_lower,ymax=B_upper), alpha = 0.5) +
+  labs(y = 'donor B cell (%)', x = 'time (days)', color = 'MPPT cell count') + theme_bw() + theme(legend.position="bottom") +
+  ggtitle('MPP transplant') 
+
+tmpptnum <- ggplot() + 
+  geom_line(data = mppt1k, aes(x = time, y = transT * 100, color = '1k MPP')) + 
+  geom_line(data = mppt5k, aes(x = time, y = transT * 100, color = '5k MPP')) + 
+  geom_line(data = mppt10k, aes(x = time, y = transT * 100, color = '10k MPP')) + 
+  geom_point(data = mppt_T, aes(x = time, y = cell_fraction, color = 'obs')) +
+  geom_errorbar(data=mppt_T, aes(x=time, ymin=T_lower,ymax=T_upper), alpha = 0.5) +
+  labs(y = 'donor T cell (%)', x = 'time (days)', color = 'MPPT cell count') + theme_bw() + theme(legend.position="bottom") 
+
+#------------------------- CLP transplanted cell count -------------------------#
+clpt1k = global_clpt(conditioning_strength = 0.5, CLPnumber = 1000) %>% mrgsim(end = 150) %>% as_tibble()
+clpt5k = global_clpt(conditioning_strength = 0.5, CLPnumber = 5000) %>% mrgsim(end = 150) %>% as_tibble()
+clpt10k = global_clpt(conditioning_strength = 0.5, CLPnumber = 10000) %>% mrgsim(end = 150) %>% as_tibble()
+
+bclptnum <- ggplot() + 
+  geom_line(data = clpt1k, aes(x = time, y = transB * 100, color = '1k CLP')) + 
+  geom_line(data = clpt5k, aes(x = time, y = transB * 100, color = '5k CLP')) + 
+  geom_line(data = clpt10k, aes(x = time, y = transB * 100, color = '10k CLP')) + 
+  geom_point(data = clpt_B, aes(x = time, y = cell_fraction, color = 'obs')) +
+  geom_errorbar(data=clpt_B, aes(x=time, ymin=B_lower,ymax=B_upper), alpha = 0.5) +
+  labs(y = 'donor B cell (%)', x = 'time (days)', color = 'CLPT cell count') + theme_bw() + theme(legend.position="bottom") 
+
+tclptnum <- ggplot() + 
+  geom_line(data = clpt1k, aes(x = time, y = transT * 100, color = '1k CLP')) + 
+  geom_line(data = clpt5k, aes(x = time, y = transT * 100, color = '5k CLP')) + 
+  geom_line(data = clpt10k, aes(x = time, y = transT * 100, color = '10k CLP')) + 
+  geom_point(data = clpt_T, aes(x = time, y = cell_fraction, color = 'obs')) +
+  geom_errorbar(data=clpt_T, aes(x=time, ymin=T_lower,ymax=T_upper), alpha = 0.5) +
+  labs(y = 'donor T cell (%)', x = 'time (days)', color = 'CLPT cell count') + theme_bw() + theme(legend.position="bottom") 
+
+png('img/progenitor_count.png', width = 14, height = 9, units = 'in', res = 300)
+grid.arrange(rbchsctnum, bhsctnum, thsctnum, rbcmpptnum, bmpptnum, tmpptnum, bclptnum, tclptnum, ncol = 3)
+dev.off()
+```
+
+
+
+```{r}
+#------------------------- LT-HSC proliferation rate analysis -------------------------#
+hsct0 = conditioning_proliferation_hsct(progenitor_conditioning_strength = 0.5, t_conditioning_strength = 0.2, hscprof = 1/(2.5*7), simendtime = 150)
+hsct1 = conditioning_proliferation_hsct(progenitor_conditioning_strength = 0.5, t_conditioning_strength = 0.2, hscprof = 1/(7), simendtime = 150)
+hsct2 = conditioning_proliferation_hsct(progenitor_conditioning_strength = 0.5, t_conditioning_strength = 0.2, hscprof = 1/(1), simendtime = 150)
+hsct3 = conditioning_proliferation_hsct(progenitor_conditioning_strength = 0.5, t_conditioning_strength = 0.2, hscprof = 1/(0.01), simendtime = 150)
+
+
+b_hsprof <- ggplot() + 
+  geom_line(data = hsct0, aes(x = time, y = transB * 100, color = '2.5 weeks')) + 
+  geom_line(data = hsct1, aes(x = time, y = transB * 100, color = '7 days')) + 
+  geom_line(data = hsct2, aes(x = time, y = transB * 100, color = '1 day')) +
+  geom_line(data = hsct3, aes(x = time, y = transB * 100, color = '0.01 day')) +
+  labs(y = 'donor B cell (%)', x = 'time (days)', color = 'HSC doubling time') +
+  ggtitle('HSC transplant') + theme_bw() + theme(legend.position="bottom")
+
+t_hscprof <- ggplot() + 
+  geom_line(data = hsct0, aes(x = time, y = transT * 100, color = '2.5 weeks')) + 
+  geom_line(data = hsct1, aes(x = time, y = transT * 100, color = '7 days')) + 
+  geom_line(data = hsct2, aes(x = time, y = transT * 100, color = '1 day')) +
+  geom_line(data = hsct3, aes(x = time, y = transT * 100, color = '0.01 day')) +
+  labs(y = 'donor T cell (%)', x = 'time (days)', color = 'HSC doubling time') +
+  ggtitle('HSC transplant') + theme_bw() + theme(legend.position="bottom") 
+
+rbc_hscprof <- ggplot() + 
+  geom_line(data = hsct0, aes(x = time, y = RBC1/(2e3), color = '2.5 weeks')) + 
+  geom_line(data = hsct1, aes(x = time, y = RBC1/(2e3), color = '7 days')) + 
+  geom_line(data = hsct2, aes(x = time, y = RBC1/(2e3), color = '1 day')) +
+  geom_line(data = hsct3, aes(x = time, y = RBC1/(2e3), color = '0.01 day')) +
+  labs(y = 'donor RBC (#/uL)', x = 'time (days)', color = 'HSC doubling time') +
+  scale_y_continuous(trans='log10',  limits = c(1, 1e7), breaks = c(1, 1e3, 1e6), labels = c('1', '1K', '1M')) +
+  ggtitle('HSC transplant') + theme_bw() +  theme(legend.position="bottom")
+
+png('img/lthscprof_scan.png', width = 15, height = 4, units = 'in', res = 300)
+grid.arrange(rbc_hscprof, b_hsprof, t_hscprof, ncol = 3)
+dev.off()
+```

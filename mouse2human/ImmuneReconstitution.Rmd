@@ -1,0 +1,93 @@
+---
+title: "scale mouse model to human"
+output: pdf_document
+author: "YL"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+---
+
+# Overview
+
+Goal: test immune reconstitution in patients after HSCT
+
+Data source: Qin et al., 2019
+https://onlinelibrary.wiley.com/doi/epdf/10.1111/ejh.13289
+
+
+```{r setup}
+rm(list=ls())  #Clear out existing objects
+gc()
+
+# load required packages
+library(tidyverse)
+library(mrgsolve)
+library(gridExtra)
+library(grid)
+
+setwd(dirname(rstudioapi::getSourceEditorContext()$path)) # set the working directory at the folder that contains the script
+
+mod <- mread("../Public/model/human_erythroid_lymphoid_myeloid") %>% param(epsilon_spl = 0.032, delta_dp = 1e-6)
+
+# pre-equlibrium
+pre_sim <- mod  %>% init(LT0 = 1200) %>%  mrgsim(end = 365 * 4) %>% as_tibble() %>% tail(n = 1) %>% mutate(time = -100)
+```
+
+
+
+# Human HSCT
+
+
+```{r}
+# set up preconditioning
+ratioleft = 1-0.9
+
+mod2 <- mod %>% init(pre_sim) %>% 
+  init(pre_sim[,3:24] * ratioleft) %>% # progenitor in BM conditioning
+  init(pre_sim[,69:74] * ratioleft) %>% # CLP and propreB conditioning
+  init(pre_sim[,75:80] * ratioleft) %>% # splenic B cell conditioning
+  init(pre_sim[,81:118] * ratioleft) %>% # thymic endures similar conditioning
+  init(pre_sim[,c(119,123,127)] * 0.05) %>% # conditioning on CD4+ T cells
+  init(pre_sim[,c(120,124,128)] * 0.1)  # conditioning on CD8+ T cells
+
+## set up initial condition for testing
+totalcd34 = 2.8e8 
+
+lthscinit = 1e-6 * totalcd34; 
+sthscinit = 1e-5 * totalcd34; 
+mppinit = 1e-3 * totalcd34;
+cmpinit = 1e-2 * totalcd34; 
+
+sim0 <- mod2 %>% init(LT1 = lthscinit, ST12 = sthscinit, MPP12 = mppinit, CMP12 = cmpinit) %>% 
+  mrgsim(end = 365 * 4) %>% as_tibble() %>% add_row(pre_sim) %>% add_row(pre_sim %>% mutate(time = -0.1) )
+
+## granulocyte reconstitution
+gmplot <- ggplot(data = sim0) + 
+  geom_line(aes(x = time, y = GMconc)) + 
+  annotate("rect", xmin = 0, xmax = Inf, ymin = 500/0.9, ymax = 500/0.4, alpha = .2) +
+  labs(y = 'cell count (#/uL peripheral blood)', x = 'time (days)', title = "granulocytes") + 
+  coord_cartesian(xlim = c(-20, 90)) + 
+  theme(legend.position = "bottom") + theme_bw()
+  
+## lymphocyte reconstitution
+bplot <- ggplot(data = sim0) + 
+  geom_line(aes(x = time, y = Bconc)) + 
+  labs(y = 'cell count (#/uL peripheral blood)', x = 'time (days)', title = 'naive B') + 
+  coord_cartesian(xlim = c(-20, 365)) + 
+  theme(legend.position = "bottom") + theme_bw()
+
+tplot <- ggplot(data = sim0) + 
+  geom_line(aes(x = time, y = Tconc)) + 
+  labs(y = 'cell count (#/uL peripheral blood)', x = 'time (days)', title = 'naive T') + 
+  coord_cartesian(xlim = c(-20, 365*4)) + 
+  theme(legend.position = "bottom") + theme_bw()
+
+tratioplot <- ggplot(data = sim0) + 
+  geom_line(aes(x = time, y = (cd4rec0+cd4rec1)/(cd8rec0+cd8rec1))) + 
+  labs(y = 'cell count (#/uL peripheral blood)', x = 'time (days)', title = 'CD4+:CD8+ ratio') + 
+  coord_cartesian(xlim = c(-20, 365)) + 
+  theme(legend.position = "bottom") + theme_bw()
+
+grid.arrange(gmplot, bplot, tplot, tratioplot, nrow = 2)
+```
+```{r}
+sessionInfo()
+```
