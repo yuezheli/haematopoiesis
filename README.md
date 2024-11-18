@@ -36,13 +36,21 @@ In this repo, multiple models are presented to develop a stem cell differentiati
 
 1. Implementation of hematopoietic cell differentiation into erythrocyte and its progenitor in human. The original model is published in [Zheng et al., 2021](https://ascpt.onlinelibrary.wiley.com/doi/full/10.1002/psp4.12638).
 
+The verification of our implementation of Zheng model is provided on [this page](SickleCell/README.md).
+
 2. Scaling hematopoietic cell development model from human to mouse. 
 
 3. Incorporate dynamics of granulocytes, B cells, and T cells into mouse hematopoietic cell. The implementation of mouse B cell and T cell developmemt models are obtained from [Shahaf et al., 2016](https://www.frontiersin.org/articles/10.3389/fimmu.2016.00077/full) and [Thomas-Vaslin et al., 2008](https://www.jimmunol.org/content/180/4/2240.long), respectively. The implementations are independently verified in folder [Bcell](Bcell/) and [Tcell](Tcell/), respectively. 
 
-4. Scaling hematopoietic cell development model from mouse to human. 
+4. Scaling hematopoietic cell development model from mouse to human. See [this page](mouse2human/readme.md). 
 
-The verification of our implementation of Zheng model is provided on [this page](SickleCell/README.md).
+5. Add megakaryocyte development in the model.
+
+The verification of the model was in [this page](thrombocytopenia-t-dm1/README.md). 
+
+The combination of the model can be found [here](myeloid-refinement/model/human_ery_lymp_mk_myeloid.cpp).
+
+6. Refine myeloid branch for neutrophil development. The model can be found [here](myeloid-refinement/model/human_ery_lymp_mk_neutrophil.cpp) with development note [here](myeloid-refinement/README.md).
 
 ## Main validations
 
@@ -64,30 +72,9 @@ The integrated human model is validated in a patient with ADA-SCID going through
 
 ![human ADA-SCID validation](mouse2human/img/aiutip1.png)
 
-### Mouse
+The neutrophil development was validated using pulse-labeling data in human. 
 
-For projects that are interested in studying naive T cell dynamics, more data is required to characterize how T cell is developed and distributed in the specific mouse cohort of interest. This includes but not limited to 
-
-- rate of CLPs being exported to thymus
-- cell breakdown in thymus (e.g. double negative cell, double positive cell) 
-- thymic output
-- steady state naive T cell breakdown in blood and other organs
-- rate for naive CD4+/ CD8+ T cells entering/ leaving other organ
-- death rate of CD4+/ CD8+ naive T cells 
-
-In addition, if a genetic disease is known to impact the function of spleen, additional information on how B cell development would be influenced is also crucial for refining the model.
-
-### Human
-
-Data wishlist would be disease specific. But at least vector copy number (VCN) in cell population-of-interest should be provided. For example, 
-
-- VCN in red blood cells (RBC)
-- VCN in naive T cells
-- VCN in naive B cells 
-- VCN in granulocytes
-
-Please note that our model does not have the capacity to interpret VCN in peripheral blood mononuclear cell (PBMC), thus a breakdown of VCN in each cell population is necessary. 
-
+![neutrophil-pulse-labeling](myeloid-refinement/deliv/figure/dynamics_neutrophi_pulselabeling.png)
 
 # Setup
 
@@ -95,23 +82,34 @@ Detailed related to how to set up the repo is detailed in [SickleCell page](Sick
 
 # Content of folders
 
-- README.md (This readme file)
+- [Bcell](Bcell/) (Implementation of mouse B cell development model in mrgsolve)
+
+- [NK_dynamics_estimation](NK_dynamics_estimation/)  (Estimation on NK cell rates in mouse. Note NK cell was not included in the final model)
+
+- [PKD](PKD/) (Development of model to predict therapy outcome in human with pyruvate kinase deficiency)
+
+- [Public](Public/) (This content was made public and was presented at ACoP 2023 ([poster linked](https://www.metrumrg.com/wp-content/uploads/2023/11/poster-YL.pdf))
 
 - [SickleCell](SickleCell/) (Development and analysis of both SCD and transfusion-dependent <img src="https://latex.codecogs.com/svg.image?\beta" title=" " />-thalassemia models)
+
+- [Tcell](Tcell/) (The development of naive T cell development model in mouse)
 
 - [human2mouse](human2mouse/) (Scale HSC erythroid arm from human to mouse; incorporate lymphoid and myeloid arms to the model)
 
 - [mouse2human](mouse2human/)  (Scale fully-integrated model from mouse to human)
 
-- [PKD](PKD/) (Development of model to predict therapy outcome in human with pyruvate kinase deficiency)
+- [myeloid-refinement](myeloid-refinement/) Combine megakaryocyte development with blood cell development, lymphoid development, and refine myeloid development to neutrophil dynamics; 
 
-- [Public](Public/) (This content is intended to be made public)
+- [thrombocytopenia-t-dm1](thrombocytopenia-t-dm1/) Implementation of megakaryocyte development and platelet dynamics and platelet decrease as the result of T-DM1 treatment. G-CSF related content is not finished in development and should be disgarded; 
 
-- [Tcell](Tcell/) (The development of naive T cell development model in mouse)
+- README.md (This readme file)
 
-- [Bcell](Bcell/) (Implementation of mouse B cell development model in mrgsolve)
 
-- [NK_dynamics_estimation](NK_dynamics_estimation/)  (Estimation on NK cell rates in mouse. Note NK cell was not included in the final model)
 
-- [thrombocytopenia-t-dm1](thrombocytopenia-t-dm1/) Implementation of megakaryocyte development and platelet dynamics and platelet decrease as the result of T-DM1 treatment. 
+
+
+
+
+
+
 
